@@ -1,14 +1,20 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import GameCard from '../components/GameCard.astro';
+import GameFilters from '../components/GameFilters.astro';
 import PageHero from '../components/PageHero.astro';
 import EmptyState from '../components/EmptyState.astro';
 import { getDatabase } from '../lib/db';
-import { getAllGames } from '../lib/games';
+import { getAllGames, getAllCategories, getAllPublishers } from '../lib/games';
 
 export const prerender = true;
 
-const games = await getAllGames(getDatabase());
+const db = getDatabase();
+const [games, categories, publishers] = await Promise.all([
+  getAllGames(db),
+  getAllCategories(db),
+  getAllPublishers(db),
+]);
 ---
 
 <Layout title="Tailspin Toys - Crowdfunding your new favorite game!">
@@ -24,10 +30,75 @@ const games = await getAllGames(getDatabase());
       {games.length === 0 ? (
         <EmptyState text="No games available at the moment." />
       ) : (
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="games-grid">
-          {games.map((game) => <GameCard game={game} />)}
-        </div>
+        <>
+          <GameFilters categories={categories} publishers={publishers} total={games.length} />
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="games-grid">
+            {games.map((game) => <GameCard game={game} />)}
+          </div>
+          <div hidden data-testid="no-results">
+            <EmptyState text="No games match the selected filters." />
+          </div>
+        </>
       )}
     </div>
   </div>
 </Layout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-testid="game-filters"]');
+  const cards = document.querySelectorAll<HTMLElement>('[data-testid="game-card"]');
+  const count = document.querySelector<HTMLElement>('[data-testid="filter-results-count"]');
+  const noResults = document.querySelector<HTMLElement>('[data-testid="no-results"]');
+
+  if (form && count && noResults) {
+    const checkboxes = Array.from(
+      form.querySelectorAll<HTMLInputElement>('input[name="category"]'),
+    );
+    const publisherSelect = form.querySelector<HTMLSelectElement>('select[name="publisher"]');
+    const total = cards.length;
+
+    /**
+     * Shows only cards matching the selected categories (any) and publisher,
+     * then updates the results count, empty state, and URL query string.
+     */
+    const applyFilters = (): void => {
+      const categoryIds = checkboxes.filter((c) => c.checked).map((c) => c.value);
+      const publisherId = publisherSelect?.value ?? '';
+      let visible = 0;
+
+      cards.forEach((card) => {
+        const matchesCategory =
+          categoryIds.length === 0 || categoryIds.includes(card.dataset.categoryId ?? '');
+        const matchesPublisher = publisherId === '' || card.dataset.publisherId === publisherId;
+        const show = matchesCategory && matchesPublisher;
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+
+      count.textContent = `Showing ${visible} of ${total} games`;
+      noResults.hidden = visible > 0;
+
+      const params = new URLSearchParams();
+      categoryIds.forEach((id) => params.append('category', id));
+      if (publisherId) params.set('publisher', publisherId);
+      const query = params.toString();
+      history.replaceState(null, '', query ? `?${query}` : location.pathname);
+    };
+
+    const params = new URLSearchParams(location.search);
+    const initialCategories = params.getAll('category');
+    checkboxes.forEach((c) => {
+      c.checked = initialCategories.includes(c.value);
+    });
+    const initialPublisher = params.get('publisher') ?? '';
+    if (publisherSelect && Array.from(publisherSelect.options).some((o) => o.value === initialPublisher)) {
+      publisherSelect.value = initialPublisher;
+    }
+
+    form.addEventListener('change', applyFilters);
+    form.addEventListener('submit', (event) => event.preventDefault());
+    // Reset restores default values after the event fires, so defer filtering.
+    form.addEventListener('reset', () => setTimeout(applyFilters, 0));
+    applyFilters();
+  }
+</script>
