@@ -1,0 +1,76 @@
+---
+import type { Category, Publisher } from '../types/game';
+import Button from './Button.astro';
+
+/** Props for the game filter form. */
+interface Props {
+    /** Categories shown as checkboxes. */
+    categories: Category[];
+    /** Publishers shown as dropdown options. */
+    publishers: Publisher[];
+    /** Total number of games, used for the initial results count. */
+    total: number;
+}
+
+const { categories, publishers, total } = Astro.props;
+
+const focusRing = 'focus:ring-2 focus:ring-blue-500 focus:outline-none';
+---
+
+<form
+    data-testid="game-filters"
+    aria-label="Filter games"
+    class="mb-8 bg-slate-800/60 backdrop-blur-sm rounded-xl border border-slate-700/50 p-6 shadow-lg"
+>
+    <div class="grid gap-6 md:grid-cols-[2fr_1fr]">
+        <fieldset>
+            <legend class="text-sm font-medium text-slate-200 mb-3">Categories</legend>
+            <div class="flex flex-wrap gap-3">
+                {categories.map((category) => (
+                    <label
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2 text-sm text-slate-200 cursor-pointer hover:bg-slate-700 transition-colors duration-200 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 has-[:checked]:border-blue-500"
+                    >
+                        <input
+                            type="checkbox"
+                            name="category"
+                            value={category.id}
+                            data-testid={`category-filter-${category.id}`}
+                            class={`h-4 w-4 rounded border-slate-500 bg-slate-800 accent-blue-500 ${focusRing}`}
+                        />
+                        <span>{category.name}</span>
+                    </label>
+                ))}
+            </div>
+        </fieldset>
+
+        <div>
+            <label for="publisher-filter" class="block text-sm font-medium text-slate-200 mb-3">
+                Publisher
+            </label>
+            <select
+                id="publisher-filter"
+                name="publisher"
+                data-testid="publisher-filter"
+                class={`w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-slate-100 ${focusRing}`}
+            >
+                <option value="">All publishers</option>
+                {publishers.map((publisher) => (
+                    <option value={publisher.id}>{publisher.name}</option>
+                ))}
+            </select>
+        </div>
+    </div>
+
+    <div class="mt-6 flex items-center justify-between gap-4">
+        <p
+            class="text-sm text-slate-300"
+            role="status"
+            aria-live="polite"
+            data-testid="filter-results-count"
+            data-total={total}
+        >
+            Showing {total} of {total} games
+        </p>
+        <Button type="reset" size="sm" data-testid="clear-filters">Clear filters</Button>
+    </div>
+</form>

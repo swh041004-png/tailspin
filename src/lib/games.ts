@@ -1,7 +1,7 @@
-import { eq, asc } from 'drizzle-orm';
+import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { Database } from './db';
 import { games, categories, publishers } from '../../db/schema';
-import type { Game } from '../types/game';
+import type { Category, Game, Publisher } from '../types/game';
 
 const gameSelection = {
     id: games.id,
@@ -50,10 +50,67 @@ function baseGamesQuery(db: Database) {
         .leftJoin(publishers, eq(games.publisherId, publishers.id));
 }
 
+/**
+ * Optional filters for the game list. Filters combine with AND.
+ */
+export interface GameFilters {
+    /** Match games in ANY of these categories. An empty array applies no filter. */
+    categoryIds?: number[];
+    /** Match games from this publisher. */
+    publisherId?: number;
+}
+
 /** All games ordered by title. */
 export async function getAllGames(db: Database): Promise<Game[]> {
     const rows = await baseGamesQuery(db).orderBy(asc(games.title));
     return rows.map(mapGame);
+}
+
+/**
+ * Fetches games ordered by title, narrowed by category and/or publisher.
+ *
+ * @param db - The Drizzle database instance.
+ * @param filters - Optional category/publisher filters; omitted filters are not applied.
+ * @returns The matching games, or an empty array when nothing matches.
+ */
+export async function getGames(db: Database, filters: GameFilters = {}): Promise<Game[]> {
+    const conditions: SQL[] = [];
+    if (filters.categoryIds && filters.categoryIds.length > 0) {
+        conditions.push(inArray(games.categoryId, filters.categoryIds));
+    }
+    if (filters.publisherId !== undefined) {
+        conditions.push(eq(games.publisherId, filters.publisherId));
+    }
+    const rows = await baseGamesQuery(db)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(asc(games.title));
+    return rows.map(mapGame);
+}
+
+/**
+ * Fetches all categories ordered by name.
+ *
+ * @param db - The Drizzle database instance.
+ * @returns Every category, for building filter options.
+ */
+export async function getAllCategories(db: Database): Promise<Category[]> {
+    return db
+        .select({ id: categories.id, name: categories.name })
+        .from(categories)
+        .orderBy(asc(categories.name));
+}
+
+/**
+ * Fetches all publishers ordered by name.
+ *
+ * @param db - The Drizzle database instance.
+ * @returns Every publisher, for building filter options.
+ */
+export async function getAllPublishers(db: Database): Promise<Publisher[]> {
+    return db
+        .select({ id: publishers.id, name: publishers.name })
+        .from(publishers)
+        .orderBy(asc(publishers.name));
 }
 
 /** All game ids ordered by title. */
